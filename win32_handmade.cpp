@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <cstdint>
+#include <Xinput.h>
 
 #define internal static
 #define local_persist static
@@ -29,8 +30,38 @@ struct win32_window_dimension
     int Height;
 };
 
+#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE* pState)
+typedef X_INPUT_GET_STATE(x_input_get_state);
+X_INPUT_GET_STATE(XInputGetStateStub)
+{
+    return(ERROR_DEVICE_NOT_CONNECTED);
+}
+global_variable x_input_get_state* XInputGetState_ = XInputGetStateStub;
+#define XInputGetState XInputGetState_
+
+#define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION* pVibration)
+typedef X_INPUT_SET_STATE(x_input_set_state);
+X_INPUT_SET_STATE(XInputSetStateStub)
+{
+    return(ERROR_DEVICE_NOT_CONNECTED);
+}
+global_variable x_input_set_state* XInputSetState_ = XInputSetStateStub;
+#define XInputSetState XInputSetState_
+
+
 global_variable bool GlobalRunning;
 global_variable win32_offscreen_buffer GlobalBackbuffer;
+
+internal void
+Win32LoadXInput(void)
+{
+    HMODULE XInputLibrary = LoadLibraryA("xinput1_3.dll");
+    if (XInputLibrary)
+    {
+        XInputGetState = (x_input_get_state*)GetProcAddress(XInputLibrary, "XInputGetState");
+        XInputSetState = (x_input_set_state*)GetProcAddress(XInputLibrary, "XInputSetState");
+    }
+}
 
 internal win32_window_dimension
 Win32GetWindowDimension(HWND Window)
@@ -130,6 +161,67 @@ CALLBACK Win32MainWindowCallback(HWND   Window,
         Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext, Dimension.Width, Dimension.Height);
         EndPaint(Window, &Paint);
     } break;
+    case WM_SYSKEYDOWN:
+    case WM_SYSKEYUP:
+    case WM_KEYDOWN:
+    case WM_KEYUP:
+    {
+        bool WasDown = ((LParam & (1 << 30)) != 0);
+        bool IsDown = ((LParam & (1 << 31)) == 0);
+        uint32 VKCode = WParam;
+        if (WasDown != IsDown)
+        {
+            if (VKCode == 'W')
+            {
+                OutputDebugStringA("W\n");
+            }
+            else if (VKCode == 'A')
+            {
+            }
+            else if (VKCode == 'S')
+            {
+            }
+            else if (VKCode == 'D')
+            {
+            }
+            else if (VKCode == 'Q')
+            {
+            }
+            else if (VKCode == 'E')
+            {
+            }
+            else if (VKCode == VK_UP)
+            {
+            }
+            else if (VKCode == VK_LEFT)
+            {
+            }
+            else if (VKCode == VK_DOWN)
+            {
+            }
+            else if (VKCode == VK_RIGHT)
+            {
+            }
+            else if (VKCode == VK_ESCAPE)
+            {
+                GlobalRunning = false;
+            }
+            else if (VKCode == VK_SPACE)
+            {
+                OutputDebugStringA("SPACE: ");
+                if (IsDown)
+                {
+                    OutputDebugStringA("Is Down");
+                }
+                if (WasDown)
+                {
+                    OutputDebugStringA("Was Down");
+                }
+                OutputDebugStringA("\n");
+            }
+        }
+
+    } break;
     default:
     {
         Result = DefWindowProcA(Window, Message, WParam, LParam);
@@ -141,6 +233,8 @@ CALLBACK Win32MainWindowCallback(HWND   Window,
 
 int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCommand)
 {
+    Win32LoadXInput();
+
     WNDCLASSA WindowClass = {};
     WindowClass.style = CS_CLASSDC | CS_OWNDC | CS_VREDRAW | CS_HREDRAW;
     WindowClass.lpfnWndProc = Win32MainWindowCallback;
@@ -178,6 +272,37 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                     TranslateMessage(&Message);
                     DispatchMessage(&Message);
                 }
+
+                for (DWORD ControllerIndex = 0; ControllerIndex < XUSER_MAX_COUNT; ++ControllerIndex)
+                {
+                    XINPUT_STATE ControllerState;
+                    if (XInputGetState(ControllerIndex, &ControllerState) == ERROR_SUCCESS)
+                    {
+                        // This controller is plugged in
+                        XINPUT_GAMEPAD* Pad = &ControllerState.Gamepad;
+                        bool Up = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_UP);
+                        bool Down = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN);
+                        bool Left = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT);
+                        bool Right = (Pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT);
+                        bool Start = (Pad->wButtons & XINPUT_GAMEPAD_START);
+                        bool Back = (Pad->wButtons & XINPUT_GAMEPAD_BACK);
+                        bool LeftShoulder = (Pad->wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER);
+                        bool RightShoulder = (Pad->wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+                        bool AButton = (Pad->wButtons & XINPUT_GAMEPAD_A);
+                        bool BButton = (Pad->wButtons & XINPUT_GAMEPAD_B);
+                        bool XButton = (Pad->wButtons & XINPUT_GAMEPAD_X);
+                        bool YButton = (Pad->wButtons & XINPUT_GAMEPAD_Y);
+
+                        int16 StickX = Pad->sThumbLX;
+                        int16 StickY = Pad->sThumbLY;
+
+                    }
+                    else
+                    {
+                        // This controller is not available
+                    }
+                }
+
                 RenderWeirdGradient(&GlobalBackbuffer, BlueOffset, GreenOffset);
                 RECT ClientRect;
                 GetClientRect(Window, &ClientRect);
