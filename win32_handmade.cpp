@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <cstdint>
 #include <Xinput.h>
+#include <dsound.h>
 
 #define internal static
 #define local_persist static
@@ -13,6 +14,7 @@ typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef float real32;
 typedef double real64;
+typedef int32 bool32;
 #define Pi32 3.14159265359f
 
 struct win32_offscreen_buffer
@@ -48,6 +50,8 @@ X_INPUT_SET_STATE(XInputSetStateStub)
 global_variable x_input_set_state* XInputSetState_ = XInputSetStateStub;
 #define XInputSetState XInputSetState_
 
+#define DIRECT_SOUND_CREATE(name) HRESULT WINAPI name(LPCGUID pcGuidDevice, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter)
+typedef DIRECT_SOUND_CREATE(direct_sound_create);
 
 global_variable bool GlobalRunning;
 global_variable win32_offscreen_buffer GlobalBackbuffer;
@@ -55,7 +59,11 @@ global_variable win32_offscreen_buffer GlobalBackbuffer;
 internal void
 Win32LoadXInput(void)
 {
-    HMODULE XInputLibrary = LoadLibraryA("xinput1_3.dll");
+    HMODULE XInputLibrary = LoadLibraryA("xinput1_4.dll");
+    if (!XInputLibrary)
+    {
+        XInputLibrary = LoadLibraryA("xinput1_3.dll");
+    }
     if (XInputLibrary)
     {
         XInputGetState = (x_input_get_state*)GetProcAddress(XInputLibrary, "XInputGetState");
@@ -219,6 +227,11 @@ CALLBACK Win32MainWindowCallback(HWND   Window,
                 }
                 OutputDebugStringA("\n");
             }
+            bool32 AltKeyWasDown = (LParam & (1 << 29));
+            if ((VKCode == VK_F4) && AltKeyWasDown)
+            {
+                GlobalRunning = false;
+            }
         }
 
     } break;
@@ -229,6 +242,58 @@ CALLBACK Win32MainWindowCallback(HWND   Window,
     }
 
     return(Result);
+}
+
+internal void
+Win32InitDSound(HWND Window, int SamplesPerSecond, int BufferSize)
+{
+    HMODULE DSoundLibrary = LoadLibraryA("dsound.dll");
+    if (DSoundLibrary)
+    {
+        direct_sound_create* DirectSoundCreate = (direct_sound_create*)GetProcAddress(DSoundLibrary, "DirectSoundCreate");
+        LPDIRECTSOUND DirectSound;
+        if (DirectSoundCreate && SUCCEEDED(DirectSoundCreate(0, &DirectSound, 0)))
+        {
+            WAVEFORMATEX WaveFormat = {};
+            WaveFormat.wFormatTag = WAVE_FORMAT_PCM;
+            WaveFormat.nChannels = 2;
+            WaveFormat.nSamplesPerSec = SamplesPerSecond;
+            WaveFormat.wBitsPerSample = 16;
+            WaveFormat.nBlockAlign = (WaveFormat.nChannels * WaveFormat.wBitsPerSample) / 8;
+            WaveFormat.nAvgBytesPerSec = WaveFormat.nSamplesPerSec * WaveFormat.nBlockAlign;
+            WaveFormat.cbSize = 0;
+            
+            if (SUCCEEDED(DirectSound->SetCooperativeLevel(Window, DSSCL_PRIORITY)))
+            {
+                DSBUFFERDESC BufferDescription = {};
+                BufferDescription.dwFlags = DSBCAPS_PRIMARYBUFFER;
+                BufferDescription.dwSize = sizeof(BufferDescription);
+                LPDIRECTSOUNDBUFFER PrimaryBuffer;
+                if (SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription, &PrimaryBuffer, 0)))
+                {
+
+                    if (SUCCEEDED(PrimaryBuffer->SetFormat(&WaveFormat)))
+                    {
+
+                    }
+                }
+            }
+            else
+            {
+                // Log this, SetCooperativeLevel failed
+            }
+            DSBUFFERDESC BufferDescription = {};
+            BufferDescription.dwSize = sizeof(BufferDescription);
+            BufferDescription.dwFlags = 0;
+            BufferDescription.dwBufferBytes = BufferSize;
+            BufferDescription.lpwfxFormat = &WaveFormat;
+            LPDIRECTSOUNDBUFFER SecondaryBuffer;
+            if (SUCCEEDED(DirectSound->CreateSoundBuffer(&BufferDescription, &SecondaryBuffer, 0)))
+            {
+
+            }
+        }
+    }
 }
 
 int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCommand)
@@ -257,8 +322,11 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
         {
             HDC DeviceContext = GetDC(Window);
 
+            Win32InitDSound(Window, 48000, 48000*sizeof(int16)*2);
+
             int BlueOffset = 0;
             int GreenOffset = 0;
+            
             GlobalRunning = true;
             while (GlobalRunning)
             {
