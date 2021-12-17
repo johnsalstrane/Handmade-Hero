@@ -10,9 +10,11 @@
 typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;
+typedef int64_t int64;
 typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
+typedef uint64_t uint64;
 typedef float real32;
 typedef double real64;
 typedef int32 bool32;
@@ -353,6 +355,10 @@ Win32FillSoundBuffer(win32_sound_output *SoundOutput, DWORD ByteToLock, DWORD By
 
 int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCommand)
 {
+    LARGE_INTEGER PerfCountFrequencyResult;
+    QueryPerformanceFrequency(&PerfCountFrequencyResult);
+    int64 PerfCountFrequency = PerfCountFrequencyResult.QuadPart;
+
     Win32LoadXInput();
 
     WNDCLASSA WindowClass = {};
@@ -396,8 +402,12 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
             int GreenOffset = 0;
 
             GlobalRunning = true;
+            LARGE_INTEGER LastCounter;
+            QueryPerformanceCounter(&LastCounter);
+            uint64 LastCycleCount = __rdtsc();
             while (GlobalRunning)
             {
+
                 MSG Message;
                 while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
                 {
@@ -441,15 +451,18 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
 
                 RenderWeirdGradient(&GlobalBackbuffer, BlueOffset, GreenOffset);
 
-                DWORD PlayCursor;
-                DWORD WriteCursor;
+                DWORD PlayCursor = 0;
+                DWORD WriteCursor = 0;
+                DWORD ByteToLock = 0;
+                DWORD BytesToWrite = 0;
+                DWORD TargetCursor = 0;
+                bool32 SoundIsValid = false;
 
                 if (SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))
                 {
-                    DWORD TargetCursor = ((PlayCursor+(SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample))% SoundOutput.SecondaryBufferSize);
+                    TargetCursor = ((PlayCursor+(SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample))% SoundOutput.SecondaryBufferSize);
                     DWORD WritePointer; // TODO(John): Remove?
-                    DWORD BytesToWrite = 0;
-                    DWORD ByteToLock = (SoundOutput.RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize;
+                    ByteToLock = (SoundOutput.RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize;
 
                     if (ByteToLock > TargetCursor)
                     {
@@ -460,17 +473,36 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                     {
                         BytesToWrite = TargetCursor - ByteToLock;
                     }
-                    Win32FillSoundBuffer(&SoundOutput, ByteToLock, SoundOutput.LatencySampleCount*SoundOutput.BytesPerSample);
+                    SoundIsValid = true;
 
-                    RECT ClientRect;
-                    GetClientRect(Window, &ClientRect);
-                    int WindowWidth = ClientRect.right - ClientRect.left;
-                    int WindowHeight = ClientRect.bottom - ClientRect.top;
-                    win32_window_dimension Dimension = Win32GetWindowDimension(Window);
-                    Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext, Dimension.Width, Dimension.Height);
-                    ++BlueOffset;
 
                 }
+                if (SoundIsValid)
+                {
+                    Win32FillSoundBuffer(&SoundOutput, ByteToLock, SoundOutput.LatencySampleCount* SoundOutput.BytesPerSample);
+
+                }
+
+                RECT ClientRect;
+                GetClientRect(Window, &ClientRect);
+                int WindowWidth = ClientRect.right - ClientRect.left;
+                int WindowHeight = ClientRect.bottom - ClientRect.top;
+                win32_window_dimension Dimension = Win32GetWindowDimension(Window);
+                Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext, Dimension.Width, Dimension.Height);
+                ++BlueOffset;
+
+                LARGE_INTEGER EndCounter;
+                QueryPerformanceCounter(&EndCounter);
+                int64 CounterElapsed = EndCounter.QuadPart - LastCounter.QuadPart;
+                int32 MSPerFrame = (int32)((1000 * CounterElapsed) / PerfCountFrequency);
+                int32 FPS = PerfCountFrequency / CounterElapsed;
+                uint64 EndCycleCount = __rdtsc();
+                uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
+                int32 MCPF = (int32)(CyclesElapsed / (1000 * 1000));
+                char Buffer[256];
+                wsprintf(Buffer, "Milliseconds/frame: %dms    %dFPS    %dmc/f\n", MSPerFrame, FPS, MCPF);
+                OutputDebugStringA(Buffer);
+                LastCounter = EndCounter;
             }
         }
         else
