@@ -1,3 +1,22 @@
+/*
+Platform Layer To-Do list
+Saved game locations
+getting a handle to our own executable file
+asset loading path
+threading
+raw input (support for multiple keyboards)
+sleep/time begin period (for laptops to save battery)
+ClipCursor()  (for multimonitor support)
+fullscreen support
+WM_SETCURSOR (control cursor visibility)
+QueryCancelAutoplay
+WM_ACTIVATEAPP (for when we are not the active app)
+Blit speed improvements (BitBlit)
+Hardware acceleration (OpenGL or Direct3D or both)
+GetKEyboardLayout (for French keyboards, international WASD support)
+*/
+
+
 #include <windows.h>
 #include <cstdint>
 #include <Xinput.h>
@@ -20,6 +39,14 @@ typedef double real64;
 typedef int32 bool32;
 #define Pi32 3.14159265359f
 
+#include "handmade.cpp"
+
+struct win32_window_dimension
+{
+    int Width;
+    int Height;
+};
+
 struct win32_offscreen_buffer
 {
     BITMAPINFO BitmapInfo;
@@ -29,11 +56,6 @@ struct win32_offscreen_buffer
     int Pitch;
 };
 
-struct win32_window_dimension
-{
-    int Width;
-    int Height;
-};
 
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE* pState)
 typedef X_INPUT_GET_STATE(x_input_get_state);
@@ -85,23 +107,6 @@ Win32GetWindowDimension(HWND Window)
     Result.Width = ClientRect.right - ClientRect.left;
     Result.Height = ClientRect.bottom - ClientRect.top;
     return(Result);
-}
-
-internal void
-RenderWeirdGradient(win32_offscreen_buffer *Buffer, int BlueOffset, int GreenOffset)
-{
-    uint8* Row = (uint8*)Buffer->BitmapMemory;
-    for (int Y = 0; Y < Buffer->BitmapHeight; Y++)
-    {
-        uint32* Pixel = (uint32*)Row;
-        for (int X = 0; X < Buffer->BitmapWidth; X++)
-        {
-            uint8 Blue = (X + BlueOffset);
-            uint8 Green = (Y + GreenOffset);
-            *Pixel++ = ((Green << 8) | Blue);
-        }
-        Row += Buffer->Pitch;
-    }
 }
 
 internal void
@@ -449,7 +454,12 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                     }
                 }
 
-                RenderWeirdGradient(&GlobalBackbuffer, BlueOffset, GreenOffset);
+                game_offscreen_buffer Buffer = {};
+                Buffer.BitmapMemory = GlobalBackbuffer.BitmapMemory;
+                Buffer.BitmapWidth = GlobalBackbuffer.BitmapWidth;
+                Buffer.BitmapHeight = GlobalBackbuffer.BitmapHeight;
+                Buffer.Pitch = GlobalBackbuffer.Pitch;
+                GameUpdateAndRender(&Buffer, BlueOffset, GreenOffset);
 
                 DWORD PlayCursor = 0;
                 DWORD WriteCursor = 0;
@@ -499,9 +509,9 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                 uint64 EndCycleCount = __rdtsc();
                 uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
                 int32 MCPF = (int32)(CyclesElapsed / (1000 * 1000));
-                char Buffer[256];
-                wsprintf(Buffer, "Milliseconds/frame: %dms    %dFPS    %dmc/f\n", MSPerFrame, FPS, MCPF);
-                OutputDebugStringA(Buffer);
+                char StringBuffer[256];
+                wsprintf(StringBuffer, "Milliseconds/frame: %dms    %dFPS    %dmc/f\n", MSPerFrame, FPS, MCPF);
+                OutputDebugStringA(StringBuffer);
                 LastCounter = EndCounter;
             }
         }
