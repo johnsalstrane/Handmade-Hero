@@ -37,17 +37,23 @@ GameOutputSound(game_sound_output_buffer* SoundBuffer, int ToneHz)
 }
 
 internal void
-GameUpdateAndRender(game_input *Input, game_offscreen_buffer* Buffer, game_sound_output_buffer *SoundBuffer)
+GameUpdateAndRender(game_memory *Memory, game_input *Input, game_offscreen_buffer* Buffer, game_sound_output_buffer *SoundBuffer)
 {
-    local_persist int BlueOffset = 0;
-    local_persist int GreenOffset = 0;
-    local_persist int ToneHz = 256;
+    Assert(sizeof(game_state) <= Memory->PermanentStorageSize);
+    game_state* GameState = (game_state*)Memory->PermanentStorage;
+    if (!Memory->IsInitialized)
+    {
+        GameState->ToneHz = 256;
+        //GameState->GreenOffset = 0; //unnecessary, since VirtualAlloc sets memory to 0
+        //GameState->BlueOffset = 0;
+        Memory->IsInitialized = true;
+    }
 
     game_controller_input* Input0 = &Input->Controllers[0];
     if (Input0->IsAnalog)
     {
-        ToneHz = 256 + (int)(128.0f * (Input0->EndX));
-        BlueOffset += (int)4.0f * (Input0->EndY);
+        GameState->ToneHz = 256 + (int)(128.0f * (Input0->EndX));
+        GameState->BlueOffset += (int)4.0f * (Input0->EndY);
     }
     else
     {
@@ -56,11 +62,11 @@ GameUpdateAndRender(game_input *Input, game_offscreen_buffer* Buffer, game_sound
 
     if (Input0->Down.EndedDown)
     {
-        GreenOffset += 1;
+        GameState->GreenOffset += 1;
     }
 
-    RenderWeirdGradient(Buffer, BlueOffset, GreenOffset);
-    GameOutputSound(SoundBuffer, ToneHz);
+    RenderWeirdGradient(Buffer, GameState->BlueOffset, GameState->GreenOffset);
+    GameOutputSound(SoundBuffer, GameState->ToneHz);
 }
 
 #define HANDMADE_CPP
