@@ -96,7 +96,24 @@ struct game_memory
 
 // Services that the platform layer provides to the game: Whad do you want to render,
 // what do you want to play out of the sound card, what do you want to do for files?
+#if HANDMADE_INTERNAL
+struct debug_read_file_result
+{
+    uint32 ContentsSize;
+    void* Contents;
+};
+internal debug_read_file_result DEBUGPlatformReadEntireFile(char* Filename);
+internal void DEBUGPlatformFreeFileMemory(void* Memory);
+internal bool32 DEBUGPlatformWriteEntireFile(char* Filename, uint32 MemorySize, void* Memory);
+#endif
 
+inline uint32
+SafeTruncateUInt64(uint64 Value)
+{
+    Assert(Value < 0xFFFFFFFF);
+    uint32 Result = (uint32)Value;
+    return(Result);
+}
 
 // Services that the game provides to the platform layer
 
