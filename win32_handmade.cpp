@@ -16,7 +16,6 @@ Hardware acceleration (OpenGL or Direct3D or both)
 GetKEyboardLayout (for French keyboards, international WASD support)
 */
 
-
 #include <windows.h>
 #include <cstdint>
 #include <Xinput.h>
@@ -294,6 +293,7 @@ Win32ClearBuffer(win32_sound_output* SoundOutput)
 internal void
 Win32ProcessKeyboardMessage(game_button_state* NewState, bool32 IsDown)
 {
+    Assert(NewState->EndedDown != IsDown);
     NewState->EndedDown = IsDown;
     ++NewState->HalfTransitionCount;
 }
@@ -456,6 +456,23 @@ Win32ProcessPendingMessages(game_controller_input* KeyboardController)
     }
 }
 
+internal real32
+Win32ProcessXInputStickValue(SHORT Value, SHORT DeadZoneThreshold)
+{
+    real32 Result = 0;
+
+    if (Value < -DeadZoneThreshold)
+    {
+        Result = (real32)Value / 32768.0f;
+    }
+    else if (Value > DeadZoneThreshold)
+    {
+        Result = (real32)Value / 32767.0f;
+    }
+
+    return(Result);
+}
+
 int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCommand)
 {
     LARGE_INTEGER PerfCountFrequencyResult;
@@ -513,7 +530,6 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
             GameMemory.TransientStorage = ((uint8*)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
             if (Samples && GameMemory.PermanentStorage && GameMemory.TransientStorage)
             {
-
                 game_input Input[2] = {};
                 game_input* NewInput = &Input[0];
                 game_input* OldInput = &Input[1];
@@ -524,21 +540,27 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                 uint64 LastCycleCount = __rdtsc();
                 while (GlobalRunning)
                 {
-                    game_controller_input* KeyboardController = &NewInput->Controllers[0];
+                    game_controller_input* OldKeyboardController = &OldInput->Controllers[0];
+                    game_controller_input* NewKeyboardController = &NewInput->Controllers[0];
                     game_controller_input ZeroController = {};
-                    *KeyboardController = ZeroController;
-                    
-                    Win32ProcessPendingMessages(KeyboardController);
+                    *NewKeyboardController = ZeroController;
+                    for (int ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
+                    {
+                        NewKeyboardController->Buttons[ButtonIndex].EndedDown = OldKeyboardController->Buttons[ButtonIndex].EndedDown;
+                    }
 
-                    DWORD MaxControllerCount = XUSER_MAX_COUNT;
+                    Win32ProcessPendingMessages(NewKeyboardController);
+
+                    DWORD MaxControllerCount = XUSER_MAX_COUNT + 1;
                     if (MaxControllerCount > ArrayCount(NewInput->Controllers))
                     {
                         MaxControllerCount = ArrayCount(NewInput->Controllers);
                     }
                     for (DWORD ControllerIndex = 0; ControllerIndex < MaxControllerCount; ++ControllerIndex)
                     {
-                        game_controller_input* OldController = &OldInput->Controllers[ControllerIndex];
-                        game_controller_input* NewController = &NewInput->Controllers[ControllerIndex];
+                        DWORD OurControllerIndex = ControllerIndex + 1;
+                        game_controller_input* OldController = &OldInput->Controllers[OurControllerIndex];
+                        game_controller_input* NewController = &NewInput->Controllers[OurControllerIndex];
                         XINPUT_STATE ControllerState;
                         if (XInputGetState(ControllerIndex, &ControllerState) == ERROR_SUCCESS)
                         {
@@ -561,27 +583,12 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                             NewController->StartX = OldController->EndX;
                             NewController->StartY = OldController->EndY;
 
-                            real32 X;
-                            if (Pad->sThumbLX < 0)
-                            {
-                                X = (real32)Pad->sThumbLX / 32768.0f;
-                            }
-                            else
-                            {
-                                X = (real32)Pad->sThumbLX / 32767.0f;
-                            }
+                            real32 X = Win32ProcessXInputStickValue(Pad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
                             NewController->MinX = NewController->MaxX = NewController->EndX = X;
-                            real32 Y;
-                            if (Pad->sThumbLY < 0)
-                            {
-                                Y = (real32)Pad->sThumbLY / 32768.0f;
-                            }
-                            else
-                            {
-                                Y = (real32)Pad->sThumbLY / 32767.0f;
-                            }
+                            real32 Y = Win32ProcessXInputStickValue(Pad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
                             NewController->MinY = NewController->MaxY = NewController->EndY = Y;
 
+                            
 
                             Win32ProcessXInputDigitalButton(Pad->wButtons, &OldController->Down, XINPUT_GAMEPAD_A, &NewController->Down);
                             Win32ProcessXInputDigitalButton(Pad->wButtons, &OldController->Right, XINPUT_GAMEPAD_A, &NewController->Right);
@@ -635,7 +642,6 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                     if (SoundIsValid)
                     {
                         Win32FillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer);
-
                     }
 
                     RECT ClientRect;

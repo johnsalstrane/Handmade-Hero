@@ -1,6 +1,16 @@
 @echo off
 
-cl -MT -DHANDMADE_SLOW=1 -DHANDMADE_INTERNAL=1 -W4 -WX -wd4201 -wd4100 -wd4189 -Oi -GR- -EHa -Z7 -Fmwin32_handmade.map -FC win32_handmade.cpp user32.lib Gdi32.lib /link -opt:ref 
+set CommonCompilerFlags= -MT -GR- -EHa -Oi -W4 -WX -wd4201 -wd4100 -wd4189 -DHANDMADE_SLOW=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_WIN32=1 -FC -Z7 -Fmwin32_handmade.map 
+set CommonLinkerFlags= -opt:ref user32.lib Gdi32.lib 
+
+REM 32-bit build
+REM cl %CommonCompilerFlags% win32_handmade.cpp /link %CommonLinkerFlags
+
+REM 64-bit build
+cl %CommonCompilerFlags% win32_handmade.cpp /link %CommonLinkerFlags%
+
+
+
 rem W4 for warning errer level 4, WX to treat warnings as errors
 rem wd4201 for the nameless struct in testprogram.h
 rem wd4100 for unrefrenced parameters

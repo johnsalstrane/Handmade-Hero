@@ -22,7 +22,7 @@ internal void
 GameOutputSound(game_sound_output_buffer* SoundBuffer, int ToneHz)
 {
     local_persist real32 tSine;
-    int16 ToneVolume = 3000;
+    int16 ToneVolume = 9000;
     int WavePeriod = SoundBuffer->SamplesPerSecond / ToneHz;
 
     int16* SampleOut = SoundBuffer->Samples;
@@ -70,6 +70,21 @@ GameUpdateAndRender(game_memory *Memory, game_input *Input, game_offscreen_buffe
     if (Input0->Down.EndedDown)
     {
         GameState->GreenOffset += 1;
+    }
+    if (Input0->Up.EndedDown)
+    {
+        GameState->GreenOffset -= 1;
+    }
+    if (Input0->Right.EndedDown)
+    {
+        GameState->ToneHz += 1;
+    }
+    if (Input0->Left.EndedDown)
+    {
+        if ((GameState->ToneHz - 1) != 0)
+        {
+            GameState->ToneHz -= 1;
+        }
     }
 
     RenderWeirdGradient(Buffer, GameState->BlueOffset, GameState->GreenOffset);
