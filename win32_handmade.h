@@ -8,11 +8,12 @@ struct win32_window_dimension
 
 struct win32_offscreen_buffer
 {
-    BITMAPINFO BitmapInfo;
-    void* BitmapMemory;
-    int BitmapWidth;
-    int BitmapHeight;
+    BITMAPINFO Info;
+    void* Memory;
+    int Width;
+    int Height;
     int Pitch;
+    int BytesPerPixel;
 };
 
 struct win32_sound_output
@@ -20,9 +21,15 @@ struct win32_sound_output
     uint32 RunningSampleIndex;
     int SamplesPerSecond;
     int BytesPerSample;
-    int SecondaryBufferSize;
+    DWORD SecondaryBufferSize;
     real32 tSine;
     int LatencySampleCount;
+};
+
+struct win32_debug_time_marker
+{
+    DWORD PlayCursor;
+    DWORD WriteCursor;
 };
 
 #define WIN32_HANDMADE_H

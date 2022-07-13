@@ -1,6 +1,6 @@
 @echo off
 
-set CommonCompilerFlags= -MT -GR- -EHa -Oi -W4 -WX -wd4201 -wd4100 -wd4189 -DHANDMADE_SLOW=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_WIN32=1 -FC -Z7 -Fmwin32_handmade.map 
+set CommonCompilerFlags= -MT -GR- -EHa -Oi -W4 -WX -wd4201 -wd4100 -wd4189 -wd4459 -wd4456 -DHANDMADE_SLOW=1 -DHANDMADE_INTERNAL=1 -DHANDMADE_WIN32=1 -FC -Z7 -Fmwin32_handmade.map 
 set CommonLinkerFlags= -opt:ref user32.lib Gdi32.lib Winmm.lib
 
 REM 32-bit build
