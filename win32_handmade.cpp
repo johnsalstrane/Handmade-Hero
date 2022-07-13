@@ -547,6 +547,7 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
 
     Win32ResizeDIBSection(&GlobalBackbuffer, 1280, 720);
 
+#define FramesOfAudioLatency 2
 #define MonitorRefreshHz 60
 #define GameUpdateHz (MonitorRefreshHz / 2)
     real32 TargetSecondsPerFrame = 1.0f / (real32)GameUpdateHz;
@@ -569,7 +570,7 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
             SoundOutput.RunningSampleIndex = 0;
             SoundOutput.SamplesPerSecond = 48000;
             SoundOutput.BytesPerSample = sizeof(int16) * 2;
-            SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
+            SoundOutput.LatencySampleCount = FramesOfAudioLatency*(SoundOutput.SamplesPerSecond / GameUpdateHz);
             SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
 
             Win32InitDSound(Window, SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
@@ -603,6 +604,9 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
 
                 int DebugTimeMarkerIndex = 0;
                 win32_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {0};
+
+                DWORD LastPlayCursor = 0;
+                bool32 SoundIsValid = false;
 
                 uint64 LastCycleCount = __rdtsc();
                 while (GlobalRunning)
@@ -702,17 +706,15 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                             NewController->IsConnected = false;
                         }
                     }
-                    DWORD PlayCursor = 0;
-                    DWORD WriteCursor = 0;
+
                     DWORD ByteToLock = 0;
                     DWORD BytesToWrite = 0;
                     DWORD TargetCursor = 0;
-                    bool32 SoundIsValid = false;
 
-                    if (SUCCEEDED(GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor)))
+                    if (SoundIsValid)
                     {
                         ByteToLock = ((SoundOutput.RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize);
-                        TargetCursor = ((PlayCursor + (SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample)) % 
+                        TargetCursor = ((LastPlayCursor + (SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample)) % 
                             SoundOutput.SecondaryBufferSize);
 
                         if (ByteToLock > TargetCursor)
@@ -724,7 +726,6 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                         {
                             BytesToWrite = TargetCursor - ByteToLock;
                         }
-                        SoundIsValid = true;
                     }
 
                     game_sound_output_buffer SoundBuffer = {};
@@ -783,6 +784,18 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                         DebugTimeMarkers, & SoundOutput, TargetSecondsPerFrame);
 #endif
                     Win32DisplayBufferInWindow(&GlobalBackbuffer, DeviceContext, Dimension.Width, Dimension.Height);
+                    
+                    DWORD PlayCursor;
+                    DWORD WriteCursor;
+                    if (GlobalSecondaryBuffer->GetCurrentPosition(&PlayCursor, &WriteCursor))
+                    {
+                        LastPlayCursor = PlayCursor;
+                        SoundIsValid = true;
+                    }
+                    else
+                    {
+                        SoundIsValid = false;
+                    }
 
 #if HANDMADE_INTERNAL
                     {
@@ -791,7 +804,6 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
                         {
                             DebugTimeMarkerIndex = 0;
                         }
-                        GlobalSecondaryBuffer->GetCurrentPosition(&Marker->PlayCursor, &Marker->WriteCursor);
 
                     }
 #endif
